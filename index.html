@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>微信图文预览模拟器</title>
+<style>
+  /* ── 全局 ─────────────────────────────── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1e1e2e;
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    color: #e0e0e0;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── 顶部栏 ───────────────────────────── */
+  .header {
+    background: #16162a;
+    border-bottom: 1px solid #2a2a40;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 56px;
+  }
+  .header .logo {
+    font-size: 18px;
+    font-weight: 700;
+    color: #07c160;
+    letter-spacing: 0.5px;
+  }
+  .header .subtitle {
+    font-size: 13px;
+    color: #888;
+  }
+
+  /* ── 主布局 ───────────────────────────── */
+  .main {
+    display: flex;
+    height: calc(100vh - 56px);
+    align-items: center;
+    justify-content: center;
+    gap: 40px;
+    padding: 20px;
+  }
+
+  /* ── 左侧控制面板 ──────────────────────── */
+  .panel {
+    background: #252540;
+    border-radius: 16px;
+    padding: 24px;
+    width: 300px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    border: 1px solid #333355;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  }
+  .panel h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #ccc;
+    margin-bottom: 4px;
+  }
+  .panel label {
+    font-size: 12px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .panel select {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #444466;
+    background: #1a1a30;
+    color: #e0e0e0;
+    font-size: 14px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .panel select:focus { border-color: #07c160; }
+  .panel select option { background: #1a1a30; color: #e0e0e0; }
+
+  .btn-load {
+    width: 100%;
+    padding: 11px 0;
+    border-radius: 8px;
+    border: none;
+    background: #07c160;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+  }
+  .btn-load:hover { background: #06ad56; transform: translateY(-1px); }
+  .btn-load:active { transform: translateY(0); }
+  .btn-load:disabled { background: #444; cursor: not-allowed; transform: none; }
+
+  .file-info {
+    font-size: 12px;
+    color: #777;
+    background: #1a1a30;
+    border-radius: 8px;
+    padding: 12px;
+    min-height: 60px;
+    line-height: 1.6;
+  }
+  .file-info strong { color: #aaa; }
+
+  .status {
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    text-align: center;
+    display: none;
+  }
+  .status.ok { display: block; background: #0a3622; color: #07c160; }
+  .status.err { display: block; background: #360a0a; color: #ff4d4f; }
+
+  /* ── 中间手机区 ────────────────────────── */
+  .phone-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* iPhone 外框 */
+  .iphone {
+    width: 413px;        /* 375 + 2×19 border */
+    background: #1c1c1e;
+    border-radius: 48px;
+    padding: 19px;
+    box-shadow:
+      0 0 0 2px #333,
+      0 0 0 4px #1a1a1a,
+      0 8px 40px rgba(0,0,0,0.5);
+    position: relative;
+  }
+
+  /* 屏幕 */
+  .screen {
+    background: #fff;
+    border-radius: 32px;
+    overflow: hidden;
+    width: 375px;
+    height: 720px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* 状态栏（装饰） */
+  .status-bar {
+    height: 44px;
+    background: #f5f5f5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 24px;
+    flex-shrink: 0;
+    border-bottom: 1px solid #eee;
+  }
+  .status-bar .time {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+  .status-bar .icons {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    font-size: 11px;
+    color: #333;
+  }
+
+  /* 标题栏（装饰） */
+  .title-bar {
+    height: 40px;
+    background: #f5f5f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-bottom: 1px solid #e0e0e0;
+    gap: 4px;
+  }
+  .title-bar .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #999;
+  }
+  .title-bar .url-bar {
+    background: #fff;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 11px;
+    color: #999;
+    margin: 0 6px;
+    border: 1px solid #e0e0e0;
+    min-width: 160px;
+    text-align: center;
+  }
+
+  /* 内容 iframe */
+  .screen iframe {
+    width: 375px;
+    flex: 1;
+    border: none;
+    background: #ffffff;
+  }
+
+  /* 底部横条 */
+  .home-bar {
+    width: 134px;
+    height: 5px;
+    background: #333;
+    border-radius: 100px;
+    margin: 16px auto 8px;
+  }
+
+  /* 空状态 */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    gap: 12px;
+    font-size: 14px;
+    height: 100%;
+    text-align: center;
+    padding: 20px;
+  }
+  .empty-state .icon { font-size: 48px; opacity: 0.4; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="logo">🟢 微信图文预览模拟器</span>
+  <span class="subtitle">WeChat Article Preview · 375px</span>
+</div>
+
+<div class="main">
+  <!-- 左侧面板 -->
+  <div class="panel">
+    <h2>📂 选择图文文件</h2>
+
+    <label>文件列表</label>
+    <select id="fileSelect">
+      <option value="">-- 请先加载文件列表 --</option>
+    </select>
+
+    <button class="btn-load" id="btnLoad" onclick="loadContent()">📱 加载到手机预览</button>
+
+    <div class="status" id="status"></div>
+
+    <div class="file-info" id="fileInfo">
+      <strong>📄 选择一个文件</strong><br>
+      点击上方下拉框选择<br>或先点击「刷新列表」
+    </div>
+
+    <div style="display:flex;gap:8px;">
+      <button class="btn-load" style="background:#444;font-size:12px;letter-spacing:0;"
+              onclick="refreshFiles()">🔄 刷新列表</button>
+      <button class="btn-load" style="background:#444;font-size:12px;letter-spacing:0;"
+              onclick="loadContent()">🔁 重新加载</button>
+    </div>
+  </div>
+
+  <!-- 中间手机 -->
+  <div class="phone-wrapper">
+    <div class="iphone">
+      <div class="screen">
+        <!-- 状态栏 -->
+        <div class="status-bar">
+          <span class="time" id="statusTime">9:41</span>
+          <span class="icons">
+            <span>▂▄▆█</span>&nbsp;
+            <span>WiFi</span>&nbsp;
+            <span>🔋</span>
+          </span>
+        </div>
+        <!-- 地址栏 -->
+        <div class="title-bar">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="url-bar">微信公众号</span>
+        </div>
+        <!-- 内容 -->
+        <iframe id="previewFrame" src="about:blank"></iframe>
+      </div>
+      <div class="home-bar"></div>
+    </div>
+    <span style="font-size:11px;color:#555;">iPhone · 375×720 · 模拟微信公众号内置浏览器</span>
+  </div>
+</div>
+
+<script>
+  const API = '';  // 同源
+
+  // 更新时间
+  function updateTime() {
+    const now = new Date();
+    document.getElementById('statusTime').textContent =
+      now.getHours().toString().padStart(2,'0') + ':' +
+      now.getMinutes().toString().padStart(2,'0');
+  }
+  updateTime();
+  setInterval(updateTime, 30000);
+
+  // 页面加载时自动获取文件列表
+  window.addEventListener('DOMContentLoaded', refreshFiles);
+
+  async function refreshFiles() {
+    const sel = document.getElementById('fileSelect');
+    const info = document.getElementById('fileInfo');
+    const status = document.getElementById('status');
+
+    sel.innerHTML = '<option value="">加载中...</option>';
+    status.className = 'status';
+    status.style.display = 'none';
+
+    try {
+      const resp = await fetch(API + '/files');
+      const data = await resp.json();
+
+      if (data.error) {
+        sel.innerHTML = '<option value="">-- 目录不存在 --</option>';
+        info.innerHTML = '<strong>⚠️ 错误</strong><br>' + data.error;
+        return;
+      }
+
+      if (data.files.length === 0) {
+        sel.innerHTML = '<option value="">-- 目录为空 --</option>';
+        info.innerHTML = '<strong>📭 暂无文件</strong><br>目录: ' + data.scan_dir;
+        return;
+      }
+
+      sel.innerHTML = data.files.map((f, i) =>
+        '<option value="' + escapeHtml(f.name) + '"' +
+        (i === 0 ? ' selected' : '') + '>' +
+        f.name + ' (' + formatSize(f.size) + ')</option>'
+      ).join('');
+
+      // 显示第一个文件信息
+      if (data.files.length > 0) {
+        const f = data.files[0];
+        info.innerHTML =
+          '<strong>📄 ' + escapeHtml(f.name) + '</strong><br>' +
+          '大小: ' + formatSize(f.size) + '<br>' +
+          '修改: ' + f.mtime + '<br>' +
+          '共 ' + data.count + ' 个文件';
+      }
+
+      setStatus('ok', '✅ 已加载 ' + data.count + ' 个文件');
+    } catch (err) {
+      sel.innerHTML = '<option value="">-- 加载失败 --</option>';
+      setStatus('err', '❌ 无法连接服务器');
+    }
+  }
+
+  function loadContent() {
+    const sel = document.getElementById('fileSelect');
+    const filename = sel.value;
+    const iframe = document.getElementById('previewFrame');
+
+    if (!filename) {
+      setStatus('err', '⚠️ 请先选择文件');
+      return;
+    }
+
+    setStatus('ok', '⏳ 加载中...');
+    iframe.src = API + '/content?file=' + encodeURIComponent(filename);
+  }
+
+  // 监听 iframe 加载完成
+  document.getElementById('previewFrame').addEventListener('load', function() {
+    if (this.src !== 'about:blank') {
+      setStatus('ok', '✅ 已加载');
+    }
+  });
+
+  // 双击下拉框自动加载
+  document.getElementById('fileSelect').addEventListener('dblclick', loadContent);
+  // 选择文件后回车加载
+  document.getElementById('fileSelect').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') loadContent();
+  });
+
+  function setStatus(type, msg) {
+    const s = document.getElementById('status');
+    s.className = 'status ' + type;
+    s.textContent = msg;
+    s.style.display = 'block';
+  }
+
+  function formatSize(bytes) {
+    if (!bytes) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+</script>
+
+</body>
+</html>
